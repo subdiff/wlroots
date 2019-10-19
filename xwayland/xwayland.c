@@ -69,15 +69,14 @@ _Noreturn static void exec_xwayland(struct wlr_xwayland *wlr_xwayland) {
 		"-rootless", "-terminate",
 		"-listen", NULL /* x_fd[0] */,
 		"-listen", NULL /* x_fd[1] */,
-		"-wm", NULL /* wm_fd[1] */,
+// 		"-wm", NULL /* wm_fd[1] */,
 		NULL,
 	};
 	char **cur_arg = argv;
 
 	if (fill_arg(&cur_arg, ":%d", wlr_xwayland->display) < 0 ||
 			fill_arg(&cur_arg, "%d", wlr_xwayland->x_fd[0]) < 0 ||
-			fill_arg(&cur_arg, "%d", wlr_xwayland->x_fd[1]) < 0 ||
-			fill_arg(&cur_arg, "%d", wlr_xwayland->wm_fd[1]) < 0) {
+			fill_arg(&cur_arg, "%d", wlr_xwayland->x_fd[1]) < 0 ) {
 		wlr_log_errno(WLR_ERROR, "alloc/print failure");
 		_exit(EXIT_FAILURE);
 	}
@@ -227,14 +226,14 @@ static int xserver_handle_ready(int signal_number, void *data) {
 	}
 	wlr_log(WLR_DEBUG, "Xserver is ready");
 
-	wlr_xwayland->xwm = xwm_create(wlr_xwayland);
-	if (!wlr_xwayland->xwm) {
-		xwayland_finish_server(wlr_xwayland);
-		return 1;
-	}
+// 	wlr_xwayland->xwm = xwm_create(wlr_xwayland);
+// 	if (!wlr_xwayland->xwm) {
+// 		xwayland_finish_server(wlr_xwayland);
+// 		return 1;
+// 	}
 
 	if (wlr_xwayland->seat) {
-		xwm_set_seat(wlr_xwayland->xwm, wlr_xwayland->seat);
+// 		xwm_set_seat(wlr_xwayland->xwm, wlr_xwayland->seat);
 	}
 
 	wl_event_source_remove(wlr_xwayland->sigusr1_source);
@@ -242,8 +241,8 @@ static int xserver_handle_ready(int signal_number, void *data) {
 
 	if (wlr_xwayland->cursor != NULL) {
 		struct wlr_xwayland_cursor *cur = wlr_xwayland->cursor;
-		xwm_set_cursor(wlr_xwayland->xwm, cur->pixels, cur->stride, cur->width,
-			cur->height, cur->hotspot_x, cur->hotspot_y);
+// 		xwm_set_cursor(wlr_xwayland->xwm, cur->pixels, cur->stride, cur->width,
+// 			cur->height, cur->hotspot_x, cur->hotspot_y);
 		free(cur);
 		wlr_xwayland->cursor = NULL;
 	}
