@@ -87,7 +87,7 @@ conf_data.set10('WLR_HAS_XWAYLAND', false)
 conf_data.set10('WLR_HAS_XCB_ERRORS', false)
 conf_data.set10('WLR_HAS_XCB_ICCCM', false)
 
-wlr_inc = include_directories('.', 'include')
+wlr_inc = include_directories('.', 'include', 'protocol')
 
 # Clang complains about some zeroed initializer lists (= {0}), even though they
 # are valid
