@@ -303,6 +303,12 @@ void wlr_output_set_description(struct wlr_output *output, const char *desc);
  * This is intended to be used by wl_output add-on interfaces.
  */
 void wlr_output_schedule_done(struct wlr_output *output);
+/**
+ * Destroys an output. On backends running nested in another windowing system
+ * the output window is closed. On backends where outputs are real display
+ * hardware this call equates to unplugging of the display. In thius case the
+ * output can only be brought back again by physically replugging the display.
+ */
 void wlr_output_destroy(struct wlr_output *output);
 /**
  * Computes the transformed output resolution.
