@@ -53,7 +53,9 @@ static void backend_destroy(struct wlr_backend *wlr_backend) {
 	}
 
 	wl_list_remove(&backend->display_destroy.link);
-	wl_list_remove(&backend->renderer_destroy.link);
+	if (backend->renderer) {
+		wl_list_remove(&backend->renderer_destroy.link);
+	}
 
 	struct wlr_headless_output *output, *output_tmp;
 	wl_list_for_each_safe(output, output_tmp, &backend->outputs, link) {
@@ -152,6 +154,21 @@ static bool backend_init(struct wlr_headless_backend *backend,
 	return true;
 }
 
+static void backend_init_stub(struct wlr_headless_backend *backend,
+		struct wl_display *display) {
+	wlr_backend_init(&backend->backend, &backend_impl);
+	backend->display = display;
+	wl_list_init(&backend->outputs);
+	wl_list_init(&backend->input_devices);
+
+	backend->allocator = NULL;
+	backend->renderer = NULL;
+	backend->format = NULL;
+
+	backend->display_destroy.notify = handle_display_destroy;
+	wl_display_add_destroy_listener(display, &backend->display_destroy);
+}
+
 static int open_drm_render_node(void) {
 	uint32_t flags = 0;
 	int devices_len = drmGetDevices2(flags, NULL, 0);
@@ -210,8 +227,10 @@ struct wlr_backend *wlr_headless_backend_create(struct wl_display *display) {
 
 	backend->drm_fd = open_drm_render_node();
 	if (backend->drm_fd < 0) {
-		wlr_log(WLR_ERROR, "Failed to open DRM render node");
-		goto error_drm_fd;
+		wlr_log(WLR_ERROR, "Failed to open DRM render node. "
+				"Running a stub headless backend without it.");
+		backend_init_stub(backend, display);
+		return &backend->backend;
 	}
 
 	int drm_fd = fcntl(backend->drm_fd, F_DUPFD_CLOEXEC, 0);
@@ -237,7 +256,6 @@ error_init:
 	wlr_allocator_destroy(&gbm_alloc->base);
 error_dup:
 	close(backend->drm_fd);
-error_drm_fd:
 	free(backend);
 	return NULL;
 }

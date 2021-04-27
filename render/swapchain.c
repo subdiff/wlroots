@@ -24,14 +24,18 @@ struct wlr_swapchain *wlr_swapchain_create(
 	swapchain->width = width;
 	swapchain->height = height;
 
-	swapchain->format = wlr_drm_format_dup(format);
-	if (swapchain->format == NULL) {
-		free(swapchain);
-		return NULL;
+	if (format) {
+		swapchain->format = wlr_drm_format_dup(format);
+		if (swapchain->format == NULL) {
+			free(swapchain);
+			return NULL;
+		}
 	}
 
-	swapchain->allocator_destroy.notify = swapchain_handle_allocator_destroy;
-	wl_signal_add(&alloc->events.destroy, &swapchain->allocator_destroy);
+	if (alloc) {
+		swapchain->allocator_destroy.notify = swapchain_handle_allocator_destroy;
+		wl_signal_add(&alloc->events.destroy, &swapchain->allocator_destroy);
+	}
 
 	return swapchain;
 }
@@ -51,7 +55,9 @@ void wlr_swapchain_destroy(struct wlr_swapchain *swapchain) {
 	for (size_t i = 0; i < WLR_SWAPCHAIN_CAP; i++) {
 		slot_reset(&swapchain->slots[i]);
 	}
-	wl_list_remove(&swapchain->allocator_destroy.link);
+	if (swapchain->allocator) {
+		wl_list_remove(&swapchain->allocator_destroy.link);
+	}
 	free(swapchain->format);
 	free(swapchain);
 }
