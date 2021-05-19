@@ -10,13 +10,13 @@
 #include <wlr/backend/drm.h>
 #include <wlr/backend/multi.h>
 #include <wlr/types/wlr_surface.h>
-#include <wlr/types/wlr_drm_lease_v1.h>
 #include <wlr/util/log.h>
 #include <wayland-util.h>
 #include <wayland-server.h>
 #include <xf86drmMode.h>
 #include "backend/drm/drm.h"
 #include "drm-lease-v1-protocol.h"
+#include "types/wlr_drm_lease_v1.h"
 #include "util/shm.h"
 #include "util/signal.h"
 
@@ -57,10 +57,8 @@ static struct wlr_drm_lease_v1 *wlr_drm_lease_v1_from_resource(
 	return wl_resource_get_user_data(resource);
 }
 
-struct wlr_drm_lease_v1 *wlr_drm_lease_device_v1_grant_lease_request(
-		struct wlr_drm_lease_device_v1 *device,
+struct wlr_drm_lease_v1 *wlr_drm_lease_request_v1_grant(
 		struct wlr_drm_lease_request_v1 *request) {
-	assert(device && request);
 	assert(request->lease);
 
 	struct wlr_drm_lease_v1 *lease = request->lease;
@@ -75,7 +73,7 @@ struct wlr_drm_lease_v1 *wlr_drm_lease_device_v1_grant_lease_request(
 	wl_list_remove(&connector->link);
 	wl_list_init(&connector->link);
 
-
+	struct wlr_drm_lease_device_v1 *device = request->device;
 	int fd = drm_create_lease(device->backend, connector->drm_connector,
 			&lease->lessee_id);
 
@@ -101,22 +99,20 @@ struct wlr_drm_lease_v1 *wlr_drm_lease_device_v1_grant_lease_request(
 	return lease;
 }
 
-void wlr_drm_lease_device_v1_reject_lease_request(
-		struct wlr_drm_lease_device_v1 *device,
+void wlr_drm_lease_request_v1_reject(
 		struct wlr_drm_lease_request_v1 *request) {
-	assert(device && request);
-	assert(request->lease);
+	assert(request && request->lease);
 	wp_drm_lease_v1_send_finished(request->lease->resource);
 	request->invalid = true;
 }
 
-void wlr_drm_lease_device_v1_revoke_lease(
-		struct wlr_drm_lease_device_v1 *device,
-		struct wlr_drm_lease_v1 *lease) {
-	assert(device && lease);
+void wlr_drm_lease_v1_revoke(struct wlr_drm_lease_v1 *lease) {
+	assert(lease);
 	if (lease->resource != NULL) {
 		wp_drm_lease_v1_send_finished(lease->resource);
 	}
+
+	struct wlr_drm_lease_device_v1 *device = lease->device;
 	if (lease->lessee_id != 0) {
 		if (drm_terminate_lease(device->backend, lease->lessee_id) < 0) {
 			wlr_log_errno(WLR_DEBUG, "drm_terminate_lease");
@@ -133,7 +129,7 @@ void wlr_drm_lease_device_v1_revoke_lease(
 }
 
 static void drm_lease_v1_destroy(struct wlr_drm_lease_v1 *lease) {
-	wlr_drm_lease_device_v1_revoke_lease(lease->device, lease);
+	wlr_drm_lease_v1_revoke(lease);
 	free(lease);
 }
 
@@ -221,7 +217,7 @@ static void drm_lease_request_v1_handle_submit(
 		/* Pre-emptively reject invalid lease requests */
 		wp_drm_lease_v1_send_finished(lease->resource);
 	} else {
-		wlr_signal_emit_safe(&request->device->events.lease_requested,
+		wlr_signal_emit_safe(&request->device->manager->events.request,
 				request);
 	}
 	wl_resource_destroy(resource);
@@ -362,15 +358,23 @@ static void lease_device_bind(struct wl_client *wl_client, void *data,
 	}
 }
 
-bool wlr_drm_lease_device_v1_offer_output(
-		struct wlr_drm_lease_device_v1 *device, struct wlr_output *output) {
-	assert(device && output);
+bool wlr_drm_lease_manager_offer_output(
+		struct wlr_drm_lease_manager *manager, struct wlr_output *output) {
+	assert(manager && output);
 	assert(wlr_output_is_drm(output));
 	struct wlr_drm_connector *drm_connector =
 		(struct wlr_drm_connector *)output;
 
-	if (device->backend != drm_connector->backend) {
-		wlr_log(WLR_ERROR, "Can't offer output from another DRM backend");
+	struct wlr_drm_lease_device_v1 *device = NULL;
+	wl_list_for_each(device, &manager->devices, link) {
+		if (device->backend == drm_connector->backend) {
+			break;
+		}
+	}
+
+	if (!device) {
+		wlr_log(WLR_ERROR, "No wlr_drm_lease_device_v1 associated with the "
+				"offered output");
 		return false;
 	}
 
@@ -404,8 +408,28 @@ bool wlr_drm_lease_device_v1_offer_output(
 	return true;
 }
 
-void wlr_drm_lease_device_v1_withdraw_output(
-		struct wlr_drm_lease_device_v1 *device, struct wlr_output *output) {
+void wlr_drm_lease_manager_withdraw_output(
+	struct wlr_drm_lease_manager *manager, struct wlr_output *output) {
+	assert(manager && output);
+	assert(wlr_output_is_drm(output));
+
+	struct wlr_drm_connector *drm_connector =
+		(struct wlr_drm_connector *)output;
+
+	struct wlr_drm_lease_device_v1 *device = NULL;
+	wl_list_for_each(device, &manager->devices, link) {
+		if (device->backend == drm_connector->backend) {
+			break;
+		}
+	}
+
+	if (!device) {
+		wlr_log(WLR_ERROR, "No wlr_drm_lease_device_v1 associated with the "
+				"given output");
+		return;
+	}
+
+
 	struct wlr_drm_lease_connector_v1 *connector = NULL, *_connector;
 	wl_list_for_each(_connector, &device->connectors, link) {
 		if (_connector->output == output) {
@@ -437,13 +461,6 @@ void wlr_drm_lease_device_v1_withdraw_output(
 	free(connector);
 }
 
-static void multi_backend_cb(struct wlr_backend *backend, void *data) {
-	struct wlr_backend **ptr = data;
-	if (wlr_backend_is_drm(backend)) {
-		*ptr = backend;
-	}
-}
-
 static void handle_display_destroy(struct wl_listener *listener, void *data) {
 	struct wlr_drm_lease_device_v1 *device =
 		wl_container_of(listener, device, display_destroy);
@@ -460,7 +477,7 @@ static void handle_display_destroy(struct wl_listener *listener, void *data) {
 	wl_resource_for_each_safe(resource, tmp_resource, &device->leases) {
 		struct wlr_drm_lease_v1 *lease =
 			wlr_drm_lease_v1_from_resource(resource);
-		wlr_drm_lease_device_v1_revoke_lease(device, lease);
+		wlr_drm_lease_v1_revoke(lease);
 	}
 
 	struct wlr_drm_lease_connector_v1 *connector, *tmp_connector;
@@ -474,18 +491,9 @@ static void handle_display_destroy(struct wl_listener *listener, void *data) {
 	free(device);
 }
 
-struct wlr_drm_lease_device_v1 *wlr_drm_lease_device_v1_create(
-		struct wl_display *display, struct wlr_backend *backend) {
-	assert(display);
-
-	if (!wlr_backend_is_drm(backend) && wlr_backend_is_multi(backend)) {
-		wlr_multi_for_each_backend(backend, multi_backend_cb, &backend);
-		if (!wlr_backend_is_drm(backend)) {
-			return NULL;
-		}
-	} else {
-		return NULL;
-	}
+struct wlr_drm_lease_device_v1 *drm_lease_device_v1_create(
+		struct wl_display *display, struct wlr_drm_backend *backend) {
+	assert(display && backend);
 
 	struct wlr_drm_lease_device_v1 *lease_device =
 		calloc(1, sizeof(struct wlr_drm_lease_device_v1));
@@ -494,13 +502,12 @@ struct wlr_drm_lease_device_v1 *wlr_drm_lease_device_v1_create(
 		return NULL;
 	}
 
-	lease_device->backend = get_drm_backend_from_backend(backend);
+	lease_device->backend = backend;
 	wl_list_init(&lease_device->resources);
 	wl_list_init(&lease_device->connectors);
 	wl_list_init(&lease_device->requests);
 	wl_list_init(&lease_device->leases);
-
-	wl_signal_init(&lease_device->events.lease_requested);
+	wl_list_init(&lease_device->link);
 
 	lease_device->display_destroy.notify = handle_display_destroy;
 	wl_display_add_destroy_listener(display, &lease_device->display_destroy);
@@ -515,4 +522,59 @@ struct wlr_drm_lease_device_v1 *wlr_drm_lease_device_v1_create(
 	}
 
 	return lease_device;
+}
+
+struct multi_backend_data {
+	struct wl_display *display;
+	struct wlr_drm_lease_manager *manager;
+};
+
+static void multi_backend_cb(struct wlr_backend *backend, void *data) {
+	struct multi_backend_data *backend_data = data;
+	if (!wlr_backend_is_drm(backend)) {
+		return;
+	}
+
+	wlr_log(WLR_DEBUG, "Adding DRM backend to wlr_drm_lease_manager");
+
+	struct wlr_drm_lease_device_v1 *device = drm_lease_device_v1_create(
+			backend_data->display, get_drm_backend_from_backend(backend));
+
+	device->manager = backend_data->manager;
+
+	wl_list_insert(&backend_data->manager->devices, &device->link);
+}
+
+struct wlr_drm_lease_manager *wlr_drm_lease_manager_create(
+		struct wl_display *display, struct wlr_backend *backend) {
+	struct wlr_drm_lease_manager *manager = calloc(1,
+			sizeof(struct wlr_drm_lease_manager));
+	if (!manager) {
+		wlr_log(WLR_ERROR, "Failed to allocate wlr_drm_lease_manager");
+		return NULL;
+	}
+
+	wl_signal_init(&manager->events.request);
+
+	wl_list_init(&manager->devices);
+
+	if (wlr_backend_is_multi(backend)) {
+		struct multi_backend_data data = {
+			.display = display,
+			.manager = manager,
+		};
+		wlr_multi_for_each_backend(backend, multi_backend_cb, &data);
+	} else if (wlr_backend_is_drm(backend)) {
+		wlr_log(WLR_DEBUG, "Adding single DRM backend to wlr_drm_lease_manager");
+		struct wlr_drm_lease_device_v1 *device = drm_lease_device_v1_create(
+			display, get_drm_backend_from_backend(backend));
+		wl_list_insert(&manager->devices, &device->link);
+	} else {
+		wlr_log(WLR_ERROR, "No DRM backend supplied, failed to create "
+				"wlr_drm_lease_manager");
+		free(manager);
+		return NULL;
+	}
+
+	return manager;
 }

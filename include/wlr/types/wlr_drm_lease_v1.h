@@ -14,16 +14,8 @@
 
 struct wlr_drm_backend;
 
-struct wlr_drm_lease_device_v1 {
-	struct wl_list resources; // wl_resource_get_link
-	struct wl_global *global;
-	struct wlr_drm_backend *backend;
-
-	struct wl_list connectors; // wlr_drm_lease_connector_v1::link
-	struct wl_list leases; // wl_resource_get_link
-	struct wl_list requests; // wl_resource_get_link
-
-	struct wl_listener display_destroy;
+struct wlr_drm_lease_manager {
+	struct wl_list devices;
 
 	struct {
 		/**
@@ -32,8 +24,23 @@ struct wlr_drm_lease_device_v1 {
 		 * requested DRM resources, or
 		 * wlr_drm_lease_device_v1_reject_lease_request to reject the request.
 		 */
-		struct wl_signal lease_requested; // wlr_drm_lease_request_v1
+		struct wl_signal request;
 	} events;
+};
+
+struct wlr_drm_lease_device_v1 {
+	struct wl_list resources; // wl_resource_get_link
+	struct wl_global *global;
+
+	struct wlr_drm_lease_manager *manager;
+	struct wlr_drm_backend *backend;
+
+	struct wl_list connectors; // wlr_drm_lease_connector_v1::link
+	struct wl_list leases; // wl_resource_get_link
+	struct wl_list requests; // wl_resource_get_link
+	struct wl_list link; // wlr_drm_lease_manager::devices
+
+	struct wl_listener display_destroy;
 
 	void *data;
 };
@@ -75,27 +82,26 @@ struct wlr_drm_lease_v1 {
 };
 
 /**
- * Creates a DRM lease device. The backend supplied must be a DRM backend, or a
- * multi-backend with a single DRM backend within.
- * Returns NULL otherwise.
+ * Creates a DRM lease manager. A DRM lease device will be created for each
+ * DRM backend supplied.
+ * Returns NULL if no DRM backend is given.
  */
-struct wlr_drm_lease_device_v1 *wlr_drm_lease_device_v1_create(
+struct wlr_drm_lease_manager *wlr_drm_lease_manager_create(
 	struct wl_display *display, struct wlr_backend *backend);
 
 /**
- * Offers a wlr_output for lease. The offered output must be owned by the DRM
- * backend associated with this lease device.
+ * Offers a wlr_output for lease.
  * Returns false if the output can't be offered to lease.
  */
-bool wlr_drm_lease_device_v1_offer_output(
-	struct wlr_drm_lease_device_v1 *device, struct wlr_output *output);
+bool wlr_drm_lease_manager_offer_output(
+	struct wlr_drm_lease_manager *manager, struct wlr_output *output);
 
 /**
  * Withdraws a previously offered output for lease. If the output is leased to
  * a client, a finished event will be send and the lease will be terminated.
  */
-void wlr_drm_lease_device_v1_withdraw_output(
-	struct wlr_drm_lease_device_v1 *device, struct wlr_output *output);
+void wlr_drm_lease_manager_withdraw_output(
+	struct wlr_drm_lease_manager *manager, struct wlr_output *output);
 
 /**
  * Grants a client's lease request. The lease device will then provision the
@@ -107,23 +113,19 @@ void wlr_drm_lease_device_v1_withdraw_output(
  * this can happen for example if two clients request the same resources and an
  * attempt to grant both leases is made.
  */
-struct wlr_drm_lease_v1 *wlr_drm_lease_device_v1_grant_lease_request(
-	struct wlr_drm_lease_device_v1 *device,
+struct wlr_drm_lease_v1 *wlr_drm_lease_request_v1_grant(
 	struct wlr_drm_lease_request_v1 *request);
 
 /**
  * Rejects a client's lease request. The output will still be available to
  * lease until withdrawn by the compositor.
  */
-void wlr_drm_lease_device_v1_reject_lease_request(
-	struct wlr_drm_lease_device_v1 *device,
-	struct wlr_drm_lease_request_v1 *request);
+void wlr_drm_lease_request_v1_reject(struct wlr_drm_lease_request_v1 *request);
 
 /**
  * Revokes a client's lease request. The output will still be available to
  * lease until withdrawn by the compositor.
  */
-void wlr_drm_lease_device_v1_revoke_lease(
-	struct wlr_drm_lease_device_v1 *device, struct wlr_drm_lease_v1 *lease);
+void wlr_drm_lease_v1_revoke(struct wlr_drm_lease_v1 *lease);
 
 #endif
