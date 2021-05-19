@@ -43,6 +43,7 @@ struct wlr_drm_plane {
 
 struct wlr_drm_crtc {
 	uint32_t id;
+	uint32_t lessee_id;
 
 	// Atomic modesetting only
 	uint32_t mode_id;
@@ -96,6 +97,7 @@ enum wlr_drm_connector_state {
 	WLR_DRM_CONN_NEEDS_MODESET,
 	WLR_DRM_CONN_CLEANUP,
 	WLR_DRM_CONN_CONNECTED,
+	WLR_DRM_CONN_LEASED
 };
 
 struct wlr_drm_mode {
@@ -112,6 +114,7 @@ struct wlr_drm_connector {
 	struct wlr_output_mode *desired_mode;
 	bool desired_enabled;
 	uint32_t id;
+	uint32_t lessee_id;
 
 	struct wlr_drm_crtc *crtc;
 	uint32_t possible_crtcs;
@@ -157,6 +160,9 @@ bool drm_connector_state_active(struct wlr_drm_connector *conn,
 	const struct wlr_output_state *state);
 void drm_connector_state_mode(struct wlr_drm_connector *conn,
 	const struct wlr_output_state *state, drmModeModeInfo *mode);
+int drm_create_lease(struct wlr_drm_backend *backend,
+	struct wlr_drm_connector *connector, uint32_t *lessee_id);
+int drm_terminate_lease(struct wlr_drm_backend *backend, uint32_t lessee_id);
 
 #define wlr_drm_conn_log(conn, verb, fmt, ...) \
 	wlr_log(verb, "connector %s: " fmt, conn->name, ##__VA_ARGS__)
