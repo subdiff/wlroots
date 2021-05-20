@@ -1629,9 +1629,20 @@ void destroy_drm_connector(struct wlr_drm_connector *conn) {
 	free(conn);
 }
 
-int drm_create_lease(struct wlr_drm_backend *backend,
-		struct wlr_drm_connector *connector, uint32_t *lessee_id) {
+int wlr_drm_backend_create_lease(struct wlr_backend *backend,
+		struct wlr_output *output, uint32_t *lessee_id) {
+	assert(backend && wlr_backend_is_drm(backend));
+	assert(output && wlr_output_is_drm(output));
+
+	struct wlr_drm_backend *drm = get_drm_backend_from_backend(backend);
+
+	struct wlr_drm_connector *connector = (struct wlr_drm_connector *)output;
 	assert(connector->state != WLR_DRM_CONN_LEASED);
+
+	if (connector->backend != drm) {
+		wlr_log(WLR_ERROR, "output doesn't belong to the backend");
+		return -EINVAL;
+	}
 
 	uint32_t objects[] = {
 		connector->id,
@@ -1643,8 +1654,7 @@ int drm_create_lease(struct wlr_drm_backend *backend,
 	int nobjects = sizeof(objects) / sizeof(objects[0]);
 
 	wlr_log(WLR_DEBUG, "Issuing DRM lease with the %d objects:", nobjects);
-	int lease_fd = drmModeCreateLease(backend->fd, objects, nobjects, 0,
-			lessee_id);
+	int lease_fd = drmModeCreateLease(drm->fd, objects, nobjects, 0, lessee_id);
 	if (lease_fd < 0) {
 		return lease_fd;
 	}
@@ -1658,23 +1668,33 @@ int drm_create_lease(struct wlr_drm_backend *backend,
 	return lease_fd;
 }
 
-int drm_terminate_lease(struct wlr_drm_backend *backend, uint32_t lessee_id) {
+int wlr_drm_backend_terminate_lease(struct wlr_backend *backend,
+		uint32_t lessee_id) {
 	wlr_log(WLR_DEBUG, "Terminating DRM lease %d", lessee_id);
-	int r = drmModeRevokeLease(backend->fd, lessee_id);
+
+	assert(backend && wlr_backend_is_drm(backend));
+	struct wlr_drm_backend *drm = get_drm_backend_from_backend(backend);
+
+	int r = drmModeRevokeLease(drm->fd, lessee_id);
+	if (r < 0) {
+		return r;
+	}
+
 	struct wlr_drm_connector *conn;
-	wl_list_for_each(conn, &backend->outputs, link) {
+	wl_list_for_each(conn, &drm->outputs, link) {
 		if (conn->state == WLR_DRM_CONN_LEASED
 				&& conn->lessee_id == lessee_id) {
 			conn->lessee_id = 0;
 			/* Will be re-initialized in scan_drm_connectors */
 		}
 	}
-	for (size_t i = 0; i < backend->num_crtcs; ++i) {
-		if (backend->crtcs[i].lessee_id == lessee_id) {
-			backend->crtcs[i].lessee_id = 0;
+
+	for (size_t i = 0; i < drm->num_crtcs; ++i) {
+		if (drm->crtcs[i].lessee_id == lessee_id) {
+			drm->crtcs[i].lessee_id = 0;
 		}
 	}
-	scan_drm_connectors(backend);
+	scan_drm_connectors(drm);
 	return r;
 }
 

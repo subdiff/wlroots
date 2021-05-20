@@ -160,9 +160,6 @@ bool drm_connector_state_active(struct wlr_drm_connector *conn,
 	const struct wlr_output_state *state);
 void drm_connector_state_mode(struct wlr_drm_connector *conn,
 	const struct wlr_output_state *state, drmModeModeInfo *mode);
-int drm_create_lease(struct wlr_drm_backend *backend,
-	struct wlr_drm_connector *connector, uint32_t *lessee_id);
-int drm_terminate_lease(struct wlr_drm_backend *backend, uint32_t lessee_id);
 
 #define wlr_drm_conn_log(conn, verb, fmt, ...) \
 	wlr_log(verb, "connector %s: " fmt, conn->name, ##__VA_ARGS__)

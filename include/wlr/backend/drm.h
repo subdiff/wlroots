@@ -34,6 +34,21 @@ bool wlr_output_is_drm(struct wlr_output *output);
 uint32_t wlr_drm_connector_get_id(struct wlr_output *output);
 
 /**
+ * Leases a given output to the caller. The output must be from the associated
+ * DRM backend.
+ * Returns -errno on error.
+ */
+int wlr_drm_backend_create_lease(struct wlr_backend *backend,
+	struct wlr_output *output, uint32_t *lessee_id);
+
+/**
+ * Terminates a given lease. The output will be owned again by the backend
+ * Returns -errno on error.
+ */
+int wlr_drm_backend_terminate_lease(struct wlr_backend *backend,
+	uint32_t lessee_id);
+
+/**
  * Add mode to the list of available modes
  */
 typedef struct _drmModeModeInfo drmModeModeInfo;
