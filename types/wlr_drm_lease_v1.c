@@ -483,9 +483,9 @@ void wlr_drm_lease_manager_withdraw_output(
 	free(connector);
 }
 
-static void handle_display_destroy(struct wl_listener *listener, void *data) {
+static void handle_backend_destroy(struct wl_listener *listener, void *data) {
 	struct wlr_drm_lease_device_v1 *device =
-		wl_container_of(listener, device, display_destroy);
+		wl_container_of(listener, device, backend_destroy);
 	struct wl_resource *resource;
 	struct wl_resource *tmp_resource;
 	wl_resource_for_each_safe(resource, tmp_resource, &device->resources) {
@@ -531,8 +531,9 @@ struct wlr_drm_lease_device_v1 *drm_lease_device_v1_create(
 	wl_list_init(&lease_device->leases);
 	wl_list_init(&lease_device->link);
 
-	lease_device->display_destroy.notify = handle_display_destroy;
-	wl_display_add_destroy_listener(display, &lease_device->display_destroy);
+	lease_device->backend_destroy.notify = handle_backend_destroy;
+
+	wl_signal_add(&backend->events.destroy, &lease_device->backend_destroy);
 
 	lease_device->global = wl_global_create(display,
 		&wp_drm_lease_device_v1_interface, 1,

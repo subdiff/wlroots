@@ -40,7 +40,7 @@ struct wlr_drm_lease_device_v1 {
 	struct wl_list requests; // wl_resource_get_link
 	struct wl_list link; // wlr_drm_lease_manager::devices
 
-	struct wl_listener display_destroy;
+	struct wl_listener backend_destroy;
 
 	void *data;
 };
