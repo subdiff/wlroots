@@ -9,10 +9,10 @@
 #ifndef WLR_TYPES_WLR_DRM_LEASE_V1_H
 #define WLR_TYPES_WLR_DRM_LEASE_V1_H
 
-#include <wayland-server.h>
-#include <wlr/backend.h>
+#include <wayland-server-core.h>
 
-struct wlr_drm_backend;
+struct wlr_backend;
+struct wlr_output;
 
 struct wlr_drm_lease_manager {
 	struct wl_list devices;
@@ -33,7 +33,7 @@ struct wlr_drm_lease_device_v1 {
 	struct wl_global *global;
 
 	struct wlr_drm_lease_manager *manager;
-	struct wlr_drm_backend *backend;
+	struct wlr_backend *backend;
 
 	struct wl_list connectors; // wlr_drm_lease_connector_v1::link
 	struct wl_list leases; // wl_resource_get_link
@@ -51,7 +51,6 @@ struct wlr_drm_lease_connector_v1 {
 	struct wl_list resources; // wl_resource_get_link
 
 	struct wlr_output *output;
-	struct wlr_drm_connector *drm_connector;
 
 	/** NULL if no client is currently leasing this connector */
 	struct wlr_drm_lease_v1 *active_lease;
@@ -82,9 +81,16 @@ struct wlr_drm_lease_v1 {
 };
 
 /**
+ * Creates a DRM lease device. The backend supplied must be a DRM backend.
+ * Returns NULL otherwise.
+ */
+struct wlr_drm_lease_device_v1 *drm_lease_device_v1_create(
+	struct wl_display *display, struct wlr_backend *backend);
+
+/**
  * Creates a DRM lease manager. A DRM lease device will be created for each
- * DRM backend supplied.
- * Returns NULL if no DRM backend is given.
+ * DRM backend supplied in case of a wlr_multi_backend.
+ * Returns NULL if no DRM backend is supplied.
  */
 struct wlr_drm_lease_manager *wlr_drm_lease_manager_create(
 	struct wl_display *display, struct wlr_backend *backend);
