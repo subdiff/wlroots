@@ -407,7 +407,6 @@ bool wlr_drm_lease_manager_offer_output(
 			return false;
 		}
 	}
-	assert(!connector);
 
 	connector = calloc(1, sizeof(struct wlr_drm_lease_connector_v1));
 	if (!connector) {
