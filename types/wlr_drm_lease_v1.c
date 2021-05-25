@@ -12,8 +12,6 @@
 #include <wlr/types/wlr_drm_lease_v1.h>
 #include <wlr/util/log.h>
 #include <wayland-util.h>
-#include <xf86drm.h>
-#include <xf86drmMode.h>
 #include "backend/drm/drm.h"
 #include "drm-lease-v1-protocol.h"
 #include "util/shm.h"
@@ -341,22 +339,14 @@ static void lease_device_bind(struct wl_client *wl_client, void *data,
 	wl_resource_set_implementation(wl_resource, &lease_device_impl, device,
 			drm_lease_device_v1_handle_resource_destroy);
 
-	struct wlr_drm_backend *backend = get_drm_backend_from_backend(
-			device->backend);
-	char *path = drmGetDeviceNameFromFd2(backend->fd);
-	int fd = open(path, O_RDWR);
+	int fd = wlr_drm_backend_get_client_fd(device->backend);
 	if (fd < 0) {
 		wlr_log_errno(WLR_ERROR, "Unable to clone DRM fd for leasing.\n");
-		free(path);
-	} else {
-		if (drmIsMaster(fd)) {
-			drmDropMaster(fd);
-		}
-		assert(!drmIsMaster(fd) && "Won't send master fd to client");
-		wp_drm_lease_device_v1_send_drm_fd(wl_resource, fd);
-		free(path);
-		close(fd);
+		return;
 	}
+
+	wp_drm_lease_device_v1_send_drm_fd(wl_resource, fd);
+	close(fd);
 
 	wl_list_insert(&device->resources, wl_resource_get_link(wl_resource));
 

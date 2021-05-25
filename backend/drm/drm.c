@@ -3,6 +3,7 @@
 #include <drm_fourcc.h>
 #include <drm_mode.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <gbm.h>
 #include <inttypes.h>
 #include <stdint.h>
@@ -1627,6 +1628,26 @@ void destroy_drm_connector(struct wlr_drm_connector *conn) {
 	drmModeFreeCrtc(conn->old_crtc);
 	wl_list_remove(&conn->link);
 	free(conn);
+}
+
+int wlr_drm_backend_get_client_fd(struct wlr_backend *backend) {
+	assert(backend && wlr_backend_is_drm(backend));
+
+	struct wlr_drm_backend *drm = get_drm_backend_from_backend(backend);
+	char *path = drmGetDeviceNameFromFd2(drm->fd);
+
+	int fd = open(path, O_RDWR);
+	if (fd < 0) {
+		wlr_log_errno(WLR_ERROR, "Unable to clone DRM fd for client fd.\n");
+		free(path);
+		return -EINVAL;
+	}
+	if (drmIsMaster(fd)) {
+		drmDropMaster(fd);
+	}
+	assert(!drmIsMaster(fd) && "Won't send master fd to client");
+	free(path);
+	return fd;
 }
 
 int wlr_drm_backend_create_lease(struct wlr_backend *backend,

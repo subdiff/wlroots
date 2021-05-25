@@ -34,9 +34,15 @@ bool wlr_output_is_drm(struct wlr_output *output);
 uint32_t wlr_drm_connector_get_id(struct wlr_output *output);
 
 /**
+ * Tries to open non-master fd.
+ * Returns an open file descriptor or -errno on error.
+ */
+int wlr_drm_backend_get_client_fd(struct wlr_backend *backend);
+
+/**
  * Leases a given output to the caller. The output must be from the associated
  * DRM backend.
- * Returns -errno on error.
+ * Returns an open file descriptor or -errno on error.
  */
 int wlr_drm_backend_create_lease(struct wlr_backend *backend,
 	struct wlr_output *output, uint32_t *lessee_id);
